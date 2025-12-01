@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Large files (models, zips)
+*.zip
+models/
+*.h5
+*.pt
+*.tar
+
+# Docker
+# docker/  <-- Un-commented to allow docker config files
+docker/data/
+docker/volumes/
+docker/log/
+
+# Logs
+src/logs/
+*.log
+
+# Datasets
+src/data/
+src/val_data/
+flotilla_quicksetup_data.zip
+

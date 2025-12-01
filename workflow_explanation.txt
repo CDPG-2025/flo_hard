@@ -1,0 +1,84 @@
+Flotilla Codebase Workflow Explanation
+
+1. System Overview
+   Flotilla is a Federated Learning (FL) framework consisting of a central Server (Leader) and multiple Clients (Workers). They communicate using:
+   - MQTT: For discovery, handshake, and heartbeats.
+   - gRPC: For high-volume data transfer (models, weights) and control commands (start training, benchmark).
+   - REST API: For users to submit training jobs (sessions) to the server.
+
+2. Initialization Phase
+   
+   A. Server Startup (`src/flo_server.py`)
+      - Starts a Flask application to listen for user commands.
+      - Initializes `FlotillaServerManager`.
+      - `FlotillaServerManager` starts `MQTTManager`.
+      - `MQTTManager` connects to the MQTT broker and publishes an advertisement on the `advert_server` topic.
+      - It then waits for clients to respond.
+
+   B. Client Startup (`src/flo_client.py`)
+      - Starts `ClientManager`.
+      - Initializes `ClientMQTTManager` and `ClientGRPCManager`.
+      - `ClientGRPCManager` starts a gRPC server (implementing `EdgeService`) to listen for commands from the server.
+      - `ClientMQTTManager` connects to the MQTT broker, subscribes to `advert_server`.
+      - Upon receiving the server's advertisement, it publishes its details (ID, gRPC endpoint, hardware info, available datasets) to `advert_client`.
+      - Starts sending periodic heartbeats on the `heartbeat` topic.
+
+   C. Discovery & Registration
+      - Server receives the client's advertisement on `advert_client`.
+      - Server registers the client in its `client_info` state (managed by `StateManager`, backed by Redis or Memory).
+      - Server monitors `heartbeat` messages to keep track of active clients.
+
+3. Session Execution Phase
+
+   A. Job Submission (`src/flo_session.py`)
+      - User runs `flo_session.py` with a configuration file (YAML).
+      - This script sends a POST request to the Server's `/execute_command` endpoint with the session config.
+
+   B. Session Initialization (`src/server/server_manager.py`)
+      - Server receives the request and spawns a `FloSessionManager`.
+      - `FloSessionManager` initializes the session state, loads the model, and prepares for training.
+      - State Management: The server uses `StateManager` to persist session data (config, round number, model weights). It supports `inmemory` (Python dicts) or `redis` backends. This allows for state persistence and recovery.
+
+   C. Connectivity Check
+      - `FloSessionManager` performs an `Echo` broadcast via gRPC to all registered clients to ensure they are reachable.
+
+   D. Training Loop (`src/server/server_session_manager.py`)
+      The server enters a loop for the specified number of rounds:
+
+      1. Client Selection:
+         - Uses a strategy (e.g., Random, FedAvg) to select a subset of active clients for this round.
+         - Selection state is persisted in `client_selection_state`.
+
+      2. Model Distribution:
+         - Checks if selected clients have the current global model using a hash-based cache check (`get_model_dir_hash`).
+         - If not, streams the model files to the client using gRPC `StreamFile`.
+         - `server_file_manager.py` handles dynamic loading of model classes from these directories.
+
+      3. Training Request:
+         - Server sends `StartTraining` command via gRPC to selected clients.
+         - Payload includes: Model ID, hyperparameters (batch size, LR), and current global weights (pickled).
+         - This is an asynchronous call (`async_grpc_train`), allowing the server to manage multiple clients concurrently.
+
+      4. Local Training (Client Side):
+         - Client receives `StartTraining` request.
+         - Loads the dataset and model.
+         - Performs local training (SGD, etc.) for specified epochs using `ClientTrainer`.
+         - Returns updated model weights and training metrics to the server.
+
+      5. Aggregation:
+         - Server collects responses from clients.
+         - Uses an aggregation strategy (e.g., FedAvg) to combine local weights into a new global model.
+         - Updates the global model in the server's state.
+
+      6. Validation (Optional):
+         - Periodically, the server evaluates the new global model on a held-out server-side validation dataset.
+         - Can also trigger validation on clients via `StartValidation`.
+
+      7. Checkpointing:
+         - Periodically saves the session state (model, round number, metrics) to disk as a `.tar` file containing pickled state dumps.
+         - This allows for `restore` (resume from memory/redis) or `revive` (resume from file) if the server crashes.
+
+4. Completion
+   - Once all rounds are completed, the session finishes.
+   - Results and logs are stored.
+   - Server returns a completion message to the `flo_session.py` script.

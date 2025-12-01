@@ -1,0 +1,72 @@
+Flotilla Distributed Setup (Multi-Machine)
+========================================
+
+This document explains how to run Flotilla when the Server and Clients are on **different physical machines**.
+
+1. Prerequisites & Networking
+-----------------------------
+- **Server Machine IP**: Let's assume the Server's IP is `192.168.1.100`.
+- **Client Machine IP**: Let's assume the Client's IP is `192.168.1.200`.
+
+### Firewall / Ports
+- **On Server Machine**:
+  - Allow Inbound TCP on Port **1884** (MQTT Broker).
+  - Allow Inbound TCP on Port **12345** (REST API for Session Start).
+  - Allow Inbound TCP on Port **6379** (Redis, if Clients need direct access, though usually only Server needs this).
+- **On Client Machine**:
+  - Allow Inbound TCP on Ports **50053** and **50054** (gRPC Sync/Async).
+  - *Note: If running multiple clients on one machine, open the subsequent ports too (50055, 50056, etc).*
+
+2. Server Machine Setup
+-----------------------
+The Server hosts the infrastructure (MQTT, Redis) and the Leader process.
+
+### A. Start Infrastructure
+Run the Docker containers for MQTT and Redis.
+```bash
+cd /path/to/flotilla/docker
+docker-compose up -d
+```
+
+### B. Start Server
+```bash
+cd /path/to/flotilla/src
+python flo_server.py
+```
+*The server will bind to 0.0.0.0 (all interfaces) by default for the REST API, so it should be accessible.*
+
+3. Client Machine Setup
+-----------------------
+The Client machine runs the worker process. It does **NOT** need to run `docker-compose`.
+
+### A. Configure MQTT IP
+You must tell the client where the MQTT Broker is (i.e., the Server's IP).
+1. Open `src/config/client_config.yaml`.
+2. Change `mqtt_broker` from `localhost` to the Server's IP.
+
+```yaml
+comm_config:
+  mqtt:
+    type: client
+    client_name: workstation
+    mqtt_broker: 192.168.1.100  # <--- CHANGE THIS
+    mqtt_broker_port: 1884
+```
+
+### B. Start Client
+Run the client script.
+```bash
+cd /path/to/flotilla/src
+python flo_client.py --client-num 1
+```
+*Note: You can use `--client-num 1` on every distinct machine, as long as they are on different IPs. The Server identifies them by their unique UUIDs (generated automatically).*
+
+4. Running a Session
+--------------------
+You can run the session script from the **Server Machine** (or any machine that can reach the Server's REST API).
+
+```bash
+cd /path/to/flotilla/src
+python flo_session.py ../config/flotilla_quicksetup_config.yaml --federated_server_endpoint 192.168.1.100:12345
+```
+*Note: Replace `192.168.1.100` with `localhost` if running this command on the Server machine itself.*

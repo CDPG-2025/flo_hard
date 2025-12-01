@@ -1,0 +1,46 @@
+Flotilla Distributed Run Commands
+=================================
+
+### MACHINE 1: SERVER
+**IP Address:** <SERVER_IP> (e.g., 192.168.1.100)
+
+**Terminal 1 (Infrastructure):**
+```bash
+cd /home/snowden/Desktop/flotilla/docker
+docker-compose up -d
+```
+
+**Terminal 2 (Server Process):**
+```bash
+source /home/snowden/Desktop/flotilla/.venv/bin/activate
+cd /home/snowden/Desktop/flotilla/src
+python flo_server.py
+```
+
+**Terminal 3 (Start Session - Can also be run from Client machine):**
+```bash
+source /home/snowden/Desktop/flotilla/.venv/bin/activate
+cd /home/snowden/Desktop/flotilla/src
+python flo_session.py ../config/flotilla_quicksetup_config.yaml --federated_server_endpoint localhost:12345
+```
+
+----------------------------------------------------------------
+
+### MACHINE 2: CLIENT
+**Prerequisite:** You MUST update the config to point to Machine 1.
+
+**Step 0: Update Config**
+Open `src/config/client_config.yaml` and change `mqtt_broker` to Machine 1's IP.
+```yaml
+comm_config:
+  mqtt:
+    mqtt_broker: <SERVER_IP>  # Change 'localhost' to 192.168.1.100
+```
+
+**Terminal 1 (Client Process):**
+```bash
+source /home/snowden/Desktop/flotilla/.venv/bin/activate
+cd /home/snowden/Desktop/flotilla/src
+python flo_client.py --client-num 1
+```
+*(Note: You do NOT run docker-compose on the client machine)*
