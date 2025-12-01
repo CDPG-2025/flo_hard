@@ -52,14 +52,37 @@ if "--restore" in sys.argv or "--revive" in sys.argv or "--file" in sys.argv:
     )
 
 parser.add_argument(
+    "--server-ip",
+    type=str,
+    default="localhost",
+    help="IP address of the Federated Learning Server (default: localhost)",
+)
+
+parser.add_argument(
+    "--server-port",
+    type=int,
+    default=12345,
+    help="Port of the Federated Learning Server REST API (default: 12345)",
+)
+
+# Legacy argument support (optional)
+parser.add_argument(
     "--federated_server_endpoint",
     type=str,
-    default="localhost:12345",
-    help="Address of the Federated Learning Server",
+    help="[Deprecated] Full address (IP:Port) of the Server. Use --server-ip instead.",
 )
 
 args = parser.parse_args()
-api_url = f"http://{args.federated_server_endpoint}/execute_command"
+
+# Construct API URL
+if args.federated_server_endpoint:
+    # Use legacy argument if provided
+    endpoint = args.federated_server_endpoint
+else:
+    # Use new arguments
+    endpoint = f"{args.server_ip}:{args.server_port}"
+
+api_url = f"http://{endpoint}/execute_command"
 
 federated_learning_config = dict()
 federated_learning_config["session_id"] = str(uuid4())
@@ -96,4 +119,11 @@ try:
         print(f"[FLOW] flo_session.py: Request failed with status code {response.status_code}")
         print("Response JSON:", response.json())
 except requests.exceptions.ConnectionError:
-    print("[FLOW] flo_session.py: Server closed connection without response")
+    print(f"\n[ERROR] Could not connect to Flotilla Server at {api_url}")
+    print("Troubleshooting:")
+    print("1. Is the Server running? (python flo_server.py)")
+    print(f"2. Is the IP '{endpoint.split(':')[0]}' correct?")
+    print("3. If running on a different machine, check Firewalls (Port 12345).")
+    print("4. If using a VM, ensure it is in 'Bridged Adapter' mode.")
+except Exception as e:
+    print(f"\n[ERROR] An unexpected error occurred: {e}")
