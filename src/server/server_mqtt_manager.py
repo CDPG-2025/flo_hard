@@ -89,7 +89,14 @@ class MQTTManager:
             )
             self.logger.info("MQTT.server.ad_response", f"{client_name}:{info}")
             userdata.set()
-            print("MQTT.ad_response from", client_id)
+            
+            # Extract IP from grpc_ep (format: ip:port)
+            client_ip = grpc_ep.split(":")[0]
+            print(f"\n[FLOW] server_mqtt_manager.py: Client Connected!")
+            print(f"      Client ID: {client_id}")
+            print(f"      Client Name: {client_name}")
+            print(f"      Client IP: {client_ip}")
+            print(f"      Full gRPC Endpoint: {grpc_ep}\n")
 
         def message_heartbeat_response(client, userdata, message):
             info = json.loads(str(message.payload.decode()))
