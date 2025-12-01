@@ -53,7 +53,7 @@ class ClientManager:
             print("RUNNING ON BARE METAL")
             ev = False
 
-        self.ip: str = get_ip_address_docker() if ev else get_ip_address()
+        self.ip: str = get_ip_address_docker() if ev else get_ip_address(self.mqtt_config["mqtt_broker"], self.mqtt_config["mqtt_broker_port"])
         print(self.ip)
 
         self.grpc_config: dict = client_config["comm_config"]["grpc"]

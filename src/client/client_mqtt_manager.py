@@ -33,7 +33,7 @@ class ClientMQTTManager:
         except KeyError:
             ev = False
 
-        self.ip: str = get_ip_address_docker() if ev else get_ip_address()
+        self.ip: str = get_ip_address_docker() if ev else get_ip_address(self.mqtt_broker, self.mqtt_broker_port)
         self.temp_dir_path = temp_dir_path
 
         self.client_id: str = id

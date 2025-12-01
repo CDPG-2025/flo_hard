@@ -1,0 +1,59 @@
+Flotilla Distributed Troubleshooting Guide
+========================================
+
+If the Server is not recognizing the Clients, check the following:
+
+1. Connectivity Check (Ping)
+----------------------------
+From the Client machine, try to ping the Server:
+```bash
+ping <SERVER_IP>
+```
+If this fails, you have a basic network issue.
+
+2. Firewall Check (Most Common)
+-------------------------------
+The Server machine must allow inbound connections on ports **1884** (MQTT) and **12345** (REST).
+On Ubuntu/Linux (Server), try:
+```bash
+sudo ufw allow 1884/tcp
+sudo ufw allow 12345/tcp
+sudo ufw reload
+```
+Or temporarily disable the firewall to test:
+```bash
+sudo ufw disable
+```
+
+3. Telnet/Netcat Test
+---------------------
+From the Client machine, verify you can reach the MQTT port:
+```bash
+nc -zv <SERVER_IP> 1884
+# OR
+telnet <SERVER_IP> 1884
+```
+If it says "Connection refused" or times out, the port is blocked or Mosquitto is not running.
+
+4. Client Configuration
+-----------------------
+Ensure `src/config/client_config.yaml` on the **Client Machine** has the correct IP:
+```yaml
+comm_config:
+  mqtt:
+    mqtt_broker: <SERVER_IP>  # NOT localhost
+    mqtt_broker_port: 1884
+```
+
+5. IP Address Detection (Offline Networks)
+------------------------------------------
+Flotilla tries to detect your Client's IP by connecting to `google.com`.
+**If your Client machine has NO INTERNET**, it might default to `127.0.0.1`.
+If this happens, the Server will try to connect to itself instead of the Client.
+
+**Workaround:**
+Manually hardcode your Client's IP in `src/client/utils/ip.py` if you are offline:
+```python
+def get_ip_address() -> str:
+    return "192.168.1.200"  # <--- Your Client's actual IP
+```
