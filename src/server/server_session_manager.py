@@ -42,7 +42,7 @@ class FloSessionManager:
         self.logger = FedLogger(id=self.id, loggername="SESSION_MANAGER")
 
         self.client_info = client_info
-        self.mqtt_init_event = mqtt_init_event
+        self.mqtt_init_finish_event = mqtt_init_event
 
         validation_data_dir_path = server_config["validation_data_dir_path"]
         self.dataset_available = get_available_datasets(validation_data_dir_path)
@@ -273,20 +273,17 @@ class FloSessionManager:
             return session_config
 
     async def start_session(self):
-        print(f"[FLOW] server_session_manager.py: start_session called for {self.id}")
-        # Wait for threading.Event in async context
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, self.mqtt_init_event.wait)
-        print("[FLOW] server_session_manager.py: MQTT initialization complete")
+        self.logger.debug("session_id", str(self.id))
+        self.mqtt_init_finish_event.wait()
+        await self.echo()
 
         active_clients = self.get_active_clients()
-        if len(active_clients) > 0:
-            print(f"[FLOW] server_session_manager.py: Performing initial Echo to {len(active_clients)} clients")
-            await self.echo()
-        else:
-            print("[FLOW] server_session_manager.py: No active clients found for Echo")
+        for client in active_clients:
+            self.client_info.put(f"{client}.is_training", False)
+        print(
+            f"session_manager.run:::active_clients:{active_clients}\t{len(active_clients)}"
+        )
 
-        print("[FLOW] server_session_manager.py: Starting training loop")
         await self.train()
 
         results = self.training_session.get(f"{self.id}.global_validation_metrics")
@@ -974,7 +971,6 @@ class FloSessionManager:
             )
 
     async def train(self):
-        print("[FLOW] server_session_manager.py: train() method started")
         start_time = time()
 
         model_id: str = self.train_config["model_id"]
@@ -1056,7 +1052,6 @@ class FloSessionManager:
                 client_selection_state=self.client_selection_state,
                 args=self.client_selection_args,
             )
-            print(f"[FLOW] server_session_manager.py: Selected training clients: {training_clients}")
             print(
                 f"IN WHILE LOOP clients selected = {training_clients}, validation clients = {validation_clients}"
             )
@@ -1093,8 +1088,7 @@ class FloSessionManager:
                     f"round_no-num_clients-clients,{round_no},{len(training_clients)},{','.join([str(x) for x in training_clients])}",
                 )
                 await self.send_model(model_id, model_dir, training_clients)
-                print(f"[FLOW] server_session_manager.py: Sending StartTraining requests to {len(training_clients)} clients")
-                await asyncio.gather(
+                asyncio.gather(
                     *(
                         self.async_grpc_train(
                             client_id=client_id,
@@ -1127,7 +1121,7 @@ class FloSessionManager:
                     f"round_no-num_clients-clients,{round_no},{len(validation_clients)},{','.join([str(x) for x in validation_clients])}",
                 )
                 await self.send_model(model_id, model_dir, validation_clients)
-                await asyncio.gather(
+                asyncio.gather(
                     *(
                         self.async_grpc_validation(
                             client_id=client_id,
@@ -1151,7 +1145,7 @@ class FloSessionManager:
             model_updated_condition.release()
 
         self.logger.info("fedserver.session.loop_runtime", f"{time()-start_time}")
-        print(f"[FLOW] server_session_manager.py: Training Ends.")
+        print(f"Training Ends.")
         return
 
     def get_active_clients(self):
