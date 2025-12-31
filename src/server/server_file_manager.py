@@ -47,21 +47,48 @@ def get_model_class(path: str, class_name: str):
         class_name (str): Name of the class in one of the .py files in "<temp_dir>/model_cache/<model_name>"
                           that contains the PyTorch model as well as the train and validate functions
     """
-    model_name = path.split("/")[-1]
     path = os.path.abspath(path)
+    model_name = os.path.basename(path)
     model_cache_dir_path = os.path.dirname(path)
     model_dir_path = path
 
+    print(f"[DEBUG] get_model_class: Checking path: {path}")
+    print(f"[DEBUG] get_model_class: Abs Model Dir: {model_dir_path}")
+    print(f"[DEBUG] get_model_class: Parent Dir: {model_cache_dir_path}")
+
     if os.path.isdir(model_cache_dir_path):
+        if not os.path.isdir(model_dir_path):
+             print(f"[ERROR] server_file_manager.get_model_class:: Model directory {model_dir_path} does not exist!")
+             return None
+             
         add_init_file_to_dir(dir_path=model_dir_path, empty_init_file=False)
         model_cache_dir_abspath = os.path.abspath(model_cache_dir_path)
-        sys.path.append(model_cache_dir_abspath)
-        module_imported = importlib.import_module(model_name, package=None)
+        if model_cache_dir_abspath not in sys.path:
+            sys.path.append(model_cache_dir_abspath)
+        
+        try:
+            module_imported = importlib.import_module(model_name, package=None)
+        except ImportError as e:
+            print(f"[ERROR] Failed to import module {model_name}: {e}")
+            return None
+
         model_dir_abspath = os.path.abspath(model_dir_path)
-        sys.path.append(model_dir_abspath)
+        if model_dir_abspath not in sys.path:
+            sys.path.append(model_dir_abspath)
+
+        print(f"[DEBUG] check modules in: {module_imported.__all__}")
 
         for file in module_imported.__all__:
-            model_imported = importlib.import_module(file, package=None)
+            try:
+                # Try importing as sub-module first if possible, or top level
+                model_imported = importlib.import_module(file, package=None)
+            except ImportError:
+                 # Fallback for some weird path issues
+                 try:
+                     model_imported = importlib.import_module(f"{model_name}.{file}", package=None)
+                 except ImportError as e:
+                     print(f"[DEBUG] Could not import {file}: {e}")
+                     continue
 
             for name_local in dir(model_imported):
                 unknown_class = getattr(model_imported, name_local)
@@ -79,7 +106,7 @@ def get_model_class(path: str, class_name: str):
         )
         return None
 
-    print(f"\nserver_file_manager.get_model_class:: {model_dir_path} not found\n")
+    print(f"\nserver_file_manager.get_model_class:: Parent dir {model_cache_dir_path} not found\n")
     return None
 
 
