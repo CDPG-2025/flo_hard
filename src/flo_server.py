@@ -62,8 +62,9 @@ def handle_request(
     except KeyboardInterrupt:
         print("Received KeyboardInterrupt")
     except Exception as e:
-        print(e)
-        print("Exception in Gather loop")
+        import traceback
+        traceback.print_exc()
+        print(f"Exception in Gather loop: {e}")
     finally:
         session_running.clear()
         if is_monitoring:

@@ -34,7 +34,11 @@ class ServerModelManager:
         self.model_dir = model_dir
 
         torch.manual_seed(1122001)
-        self.model = get_model_class(path=model_dir, class_name=model_class)(
+        model_cls = get_model_class(path=model_dir, class_name=model_class)
+        if model_cls is None:
+            raise ValueError(f"Could not load model class '{model_class}' from '{model_dir}'. Please check logs for import errors.")
+            
+        self.model = model_cls(
             device=torch_device, args=model_args
         )
 
